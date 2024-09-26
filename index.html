@@ -12,8 +12,9 @@
             box-sizing: border-box;
         }
 
-        /* Body background */
+        /* Added a 5-pixel margin around the entire page */
         body {
+            margin: 5px;
             background-color: #ffffff;
             transition: background-color 0.3s;
         }
@@ -26,8 +27,8 @@
         /* Container for the slideshow */
         #slideshow {
             position: relative;
-            width: 100%;
-            height: 100vh;
+            width: calc(100% - 10px); /* Adjusted for body margin */
+            height: calc(100vh - 10px); /* Adjusted for body margin */
             overflow: hidden;
         }
 
@@ -46,9 +47,9 @@
             position: fixed;
             width: 250px;
             max-width: 80%;
-            height: 100%;
+            height: calc(100% - 10px); /* Adjusted for body margin */
             background-color: #f1f1f1;
-            top: 0;
+            top: 5px; /* Adjusted for body margin */
             right: -250px;
             transition: 0.3s;
             padding: 20px;
@@ -59,21 +60,29 @@
 
         /* Open side panel */
         #sidePanel.open {
-            right: 0;
+            right: 5px; /* Adjusted for body margin */
         }
 
         /* Hamburger menu */
         #openBtn {
             position: fixed;
-            top: 20px;
-            right: 20px;
+            top: 25px; /* Adjusted for body margin */
+            right: 25px; /* Adjusted for body margin */
             font-size: 30px;
             cursor: pointer;
             z-index: 1001;
+            color: #000000; /* Default color */
+            transition: color 0.3s;
+        }
+
+        /* Change hamburger menu color when dark mode is active */
+        body.dark-mode #openBtn {
+            color: #ffffff;
         }
 
         /* Input fields */
-        #sidePanel input[type=text], #sidePanel input[type=number] {
+        #sidePanel input[type=text],
+        #sidePanel input[type=number] {
             width: 100%;
             padding: 10px;
             margin: 10px 0;
@@ -92,7 +101,7 @@
             height: 24px;
         }
 
-        .switch input { 
+        .switch input {
             opacity: 0;
             width: 0;
             height: 0;
@@ -124,10 +133,6 @@
             background-color: #2196F3;
         }
 
-        input:focus + .slider {
-            box-shadow: 0 0 1px #2196F3;
-        }
-
         input:checked + .slider:before {
             transform: translateX(26px);
         }
@@ -147,8 +152,6 @@
         }
     </style>
 </head>
-<!-- ... (HTML head and styles remain the same) -->
-
 <body>
     <!-- Slideshow container -->
     <div id="slideshow">
@@ -191,6 +194,7 @@
         let currentIndex = 0;
         let intervalId = null;
         let fadeDuration = 1000; // default fade duration in milliseconds
+        let duration = 5000; // default photo duration in milliseconds
 
         // Open and close side panel
         openBtn.addEventListener('click', () => {
@@ -219,7 +223,7 @@
                 return;
             }
 
-            let duration = parseInt(durationInput) * 1000;
+            duration = parseInt(durationInput) * 1000;
             fadeDuration = parseFloat(fadeDurationInput) * 1000;
 
             if (isNaN(duration) || duration <= 0) {
@@ -286,9 +290,23 @@
                     }, { once: true });
                 }
             };
+
+            // If image fails to load, skip to the next image
             img.onerror = () => {
                 console.error('Error loading image:', src);
+                // Remove the broken image element if it has been added
+                if (img.parentNode) {
+                    img.parentNode.removeChild(img);
+                }
+                // Skip to the next image immediately
+                nextImage();
             };
+        }
+
+        // Function to display the next image
+        function nextImage() {
+            currentIndex = (currentIndex + 1) % images.length;
+            displayImage(images[currentIndex]);
         }
 
         // Function to fetch images from the bucket
@@ -298,10 +316,11 @@
                 bucketUrl = bucketUrl.replace(/\/+$/, '');
 
                 const listUrl = bucketUrl + '?list-type=2';
-                const response = await fetch(listUrl, { mode: 'cors' });
+                const response = await fetch(listUrl);
 
                 if (!response.ok) {
-                    throw new Error('Network response was not ok');
+                    const errorText = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}\n${errorText}`);
                 }
 
                 const text = await response.text();
