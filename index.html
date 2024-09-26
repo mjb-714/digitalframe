@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Digital Photo Frame</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        /* Reset default margin and padding */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Body background */
+        body {
+            background-color: #ffffff;
+            transition: background-color 0.3s;
+        }
+
+        /* Dark mode */
+        body.dark-mode {
+            background-color: #000000;
+        }
+
+        /* Container for the slideshow */
+        #slideshow {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Images */
+        #slideshow img {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            opacity: 0;
+            transition: opacity ease-in-out;
+        }
+
+        /* Side panel */
+        #sidePanel {
+            position: fixed;
+            width: 250px;
+            max-width: 80%;
+            height: 100%;
+            background-color: #f1f1f1;
+            top: 0;
+            right: -250px;
+            transition: 0.3s;
+            padding: 20px;
+            box-shadow: -2px 0 5px rgba(0,0,0,0.5);
+            overflow-y: auto;
+            z-index: 1000;
+        }
+
+        /* Open side panel */
+        #sidePanel.open {
+            right: 0;
+        }
+
+        /* Hamburger menu */
+        #openBtn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            font-size: 30px;
+            cursor: pointer;
+            z-index: 1001;
+        }
+
+        /* Input fields */
+        #sidePanel input[type=text], #sidePanel input[type=number] {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+        }
+
+        /* Button */
+        #sidePanel button {
+            padding: 10px 20px;
+        }
+
+        /* Toggle switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+
+        .switch input { 
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .2s;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .2s;
+        }
+
+        input:checked + .slider {
+            background-color: #2196F3;
+        }
+
+        input:focus + .slider {
+            box-shadow: 0 0 1px #2196F3;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        /* Rounded sliders */
+        .slider.round {
+            border-radius: 24px;
+        }
+
+        .slider.round:before {
+            border-radius: 50%;
+        }
+
+        /* Ensure the slideshow is behind the side panel */
+        #slideshow {
+            z-index: 0;
+        }
+    </style>
+</head>
+<!-- ... (HTML head and styles remain the same) -->
+
+<body>
+    <!-- Slideshow container -->
+    <div id="slideshow">
+        <!-- Images will be inserted here -->
+    </div>
+
+    <!-- Hamburger menu -->
+    <div id="openBtn">&#9776;</div>
+
+    <!-- Side panel -->
+    <div id="sidePanel">
+        <h2>Settings</h2>
+        <label for="bucketUrl">Wasabi Bucket URL:</label>
+        <input type="text" id="bucketUrl" placeholder="Enter bucket URL">
+        <label for="duration">Photo Duration (seconds):</label>
+        <input type="number" id="duration" min="1" value="5">
+        <label for="fadeDuration">Fade Duration (seconds):</label>
+        <input type="number" id="fadeDuration" min="0" step="0.1" value="1">
+        <label for="backgroundToggle">Background Color:</label>
+        <label class="switch">
+            <input type="checkbox" id="backgroundToggle">
+            <span class="slider round"></span>
+        </label>
+        <span id="backgroundLabel">White</span>
+        <br><br>
+        <button id="startBtn">Start Slideshow</button>
+    </div>
+
+    <script>
+        // JavaScript code
+
+        const openBtn = document.getElementById('openBtn');
+        const sidePanel = document.getElementById('sidePanel');
+        const startBtn = document.getElementById('startBtn');
+        const slideshow = document.getElementById('slideshow');
+        const backgroundToggle = document.getElementById('backgroundToggle');
+        const backgroundLabel = document.getElementById('backgroundLabel');
+
+        let images = [];
+        let currentIndex = 0;
+        let intervalId = null;
+        let fadeDuration = 1000; // default fade duration in milliseconds
+
+        // Open and close side panel
+        openBtn.addEventListener('click', () => {
+            sidePanel.classList.toggle('open');
+        });
+
+        // Background toggle
+        backgroundToggle.addEventListener('change', () => {
+            if (backgroundToggle.checked) {
+                document.body.classList.add('dark-mode');
+                backgroundLabel.textContent = 'Black';
+            } else {
+                document.body.classList.remove('dark-mode');
+                backgroundLabel.textContent = 'White';
+            }
+        });
+
+        // Start slideshow
+        startBtn.addEventListener('click', () => {
+            const bucketUrlInput = document.getElementById('bucketUrl').value.trim();
+            const durationInput = document.getElementById('duration').value.trim();
+            const fadeDurationInput = document.getElementById('fadeDuration').value.trim();
+
+            if (!bucketUrlInput) {
+                alert('Please enter a bucket URL.');
+                return;
+            }
+
+            let duration = parseInt(durationInput) * 1000;
+            fadeDuration = parseFloat(fadeDurationInput) * 1000;
+
+            if (isNaN(duration) || duration <= 0) {
+                alert('Please enter a valid photo duration.');
+                return;
+            }
+
+            if (isNaN(fadeDuration) || fadeDuration < 0) {
+                alert('Please enter a valid fade duration.');
+                return;
+            }
+
+            // Fetch images from the bucket
+            fetchImages(bucketUrlInput)
+                .then(imgUrls => {
+                    if (imgUrls.length === 0) {
+                        alert('No images found in the bucket.');
+                        return;
+                    }
+
+                    images = imgUrls;
+                    currentIndex = 0;
+
+                    // Start the slideshow
+                    if (intervalId) {
+                        clearInterval(intervalId);
+                    }
+
+                    // Display the first image immediately
+                    displayImage(images[currentIndex]);
+
+                    intervalId = setInterval(() => {
+                        currentIndex = (currentIndex + 1) % images.length;
+                        displayImage(images[currentIndex]);
+                    }, duration);
+
+                    // Close the side panel
+                    sidePanel.classList.remove('open');
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('Error fetching images: ' + err.message);
+                });
+        });
+
+        // Function to display an image with fade transition
+        function displayImage(src) {
+            const previousImg = slideshow.querySelector('img');
+            const img = document.createElement('img');
+            img.src = src;
+            img.style.opacity = 0;
+            img.style.transitionDuration = fadeDuration + 'ms';
+
+            img.onload = () => {
+                slideshow.appendChild(img);
+                // Force reflow to make the transition work
+                void img.offsetWidth;
+                img.style.opacity = 1;
+
+                if (previousImg) {
+                    previousImg.style.opacity = 0;
+                    previousImg.addEventListener('transitionend', () => {
+                        slideshow.removeChild(previousImg);
+                    }, { once: true });
+                }
+            };
+            img.onerror = () => {
+                console.error('Error loading image:', src);
+            };
+        }
+
+        // Function to fetch images from the bucket
+        async function fetchImages(bucketUrl) {
+            try {
+                // Remove trailing slash from bucketUrl if present
+                bucketUrl = bucketUrl.replace(/\/+$/, '');
+
+                const listUrl = bucketUrl + '?list-type=2';
+                const response = await fetch(listUrl, { mode: 'cors' });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
+                const text = await response.text();
+
+                // Parse the XML response
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(text, 'text/xml');
+
+                const keys = xmlDoc.getElementsByTagName('Key');
+
+                const imgUrls = [];
+
+                for (let i = 0; i < keys.length; i++) {
+                    const key = keys[i].textContent;
+
+                    // Check if the key is an image file
+                    if (/\.(jpg|jpeg|png|gif)$/i.test(key)) {
+                        const imgUrl = bucketUrl + '/' + encodeURIComponent(key);
+                        imgUrls.push(imgUrl);
+                    }
+                }
+
+                return imgUrls;
+            } catch (error) {
+                console.error('Error fetching images:', error);
+                throw error;
+            }
+        }
+    </script>
+</body>
+</html>
